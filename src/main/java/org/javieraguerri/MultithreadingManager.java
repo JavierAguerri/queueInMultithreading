@@ -6,119 +6,139 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class MultithreadingManager {
     private final OrderQueue orderQueue;
-    private final List<Producer> producers;
-    private final List<Consumer> consumers;
-    private final List<Thread> producerThreads;
-    private final List<Thread> consumerThreads;
-    private final AtomicInteger activeProducers;
-    private final OrderFactory orderFactory;
-    private final OrderProcessor orderProcessor;
+    private final List<Producer> producers = new ArrayList<>();
+    private final List<Consumer> consumers = new ArrayList<>();
+    private final List<Thread> producerThreads = new ArrayList<>();
+    private final List<Thread> consumerThreads = new ArrayList<>();
+    private final AtomicInteger activeProducers = new AtomicInteger(0);
+    private final AtomicInteger activeConsumers = new AtomicInteger(0);
+    private final OrderFactory orderFactory = new OrderFactory();
+    private final OrderProcessor orderProcessor = new OrderProcessor();
+    private final int consumerLimit;
+    private final int producerLimit;
+
+    private enum ShutdownState {
+        NOT_STARTED, IN_PROGRESS, COMPLETED
+    }
+
+    private volatile ShutdownState shutdownState = ShutdownState.NOT_STARTED;
 
     public MultithreadingManager(int maxQueueSize) {
+        this(maxQueueSize, 20, 20);
+    }
+
+    public MultithreadingManager(int maxQueueSize, int consumerLimit, int producerLimit) {
         this.orderQueue = new OrderQueue(maxQueueSize);
-        this.producers = new ArrayList<>();
-        this.consumers = new ArrayList<>();
-        this.producerThreads = new ArrayList<>();
-        this.consumerThreads = new ArrayList<>();
-        this.activeProducers = new AtomicInteger(0);
-        this.orderFactory = new OrderFactory();
-        this.orderProcessor = new OrderProcessor();
+        this.consumerLimit = consumerLimit;
+        this.producerLimit = producerLimit;
     }
 
     public void addProducer(long delayMs) {
-        activeProducers.incrementAndGet();
-        Producer producer = new Producer(orderQueue, delayMs, this, orderFactory);
-        Thread producerThread = new Thread(producer, "Producer-" + (producerThreads.size() + 1));
-        producers.add(producer);
-        producerThreads.add(producerThread);
-        System.out.println("Created thread " + producerThread.getName());
-        producerThread.start();
+        if (activeProducers.get() < producerLimit) {
+            activeProducers.incrementAndGet();
+            Producer producer = new Producer(orderQueue, delayMs, orderFactory);
+            Thread producerThread = new Thread(producer, "Producer-" + (producerThreads.size() + 1));
+            producers.add(producer);
+            producerThreads.add(producerThread);
+            System.out.println("Created thread " + producerThread.getName());
+            producerThread.start();
+        } else {
+            System.out.println("Can't create producer thread - reached limit: " + producerLimit);
+        }
     }
 
     public void addConsumer(long delayMs) {
-        Consumer consumer = new Consumer(orderQueue, delayMs, orderProcessor);
-        Thread consumerThread = new Thread(consumer, "Consumer-" + (consumerThreads.size() + 1));
-        consumers.add(consumer);
-        consumerThreads.add(consumerThread);
-        System.out.println("Created thread " + consumerThread.getName());
-        consumerThread.start();
+        if (activeConsumers.get() < consumerLimit) {
+            activeConsumers.incrementAndGet();
+            Consumer consumer = new Consumer(orderQueue, delayMs, orderProcessor);
+            Thread consumerThread = new Thread(consumer, "Consumer-" + (consumerThreads.size() + 1));
+            consumers.add(consumer);
+            consumerThreads.add(consumerThread);
+            System.out.println("Created thread " + consumerThread.getName());
+            consumerThread.start();
+        } else {
+            System.out.println("Can't create consumer thread - reached limit: " + consumerLimit);
+        }
     }
-
 
     public void removeProducer() {
         if (producers.isEmpty()) {
             System.out.println("No producers to remove.");
             return;
         }
-        // Remove the last added producer
         int index = producers.size() - 1;
         Producer producer = producers.remove(index);
         Thread producerThread = producerThreads.remove(index);
         producer.shutdown();
-        producerThread.interrupt(); // Interrupt the producer thread to wake it up
+        producerThread.interrupt();
+        activeProducers.decrementAndGet();
         try {
             producerThread.join();
-            System.out.println("Removed and stopped " + producerThread.getName());
+            System.out.println("Removed and stopped " + producerThread.getName() + ". Active producers: " + activeProducers.get());
         } catch (InterruptedException e) {
-            producerThread.interrupt();
+            Thread.currentThread().interrupt();
             System.out.println("Interrupted while waiting for thread " + producerThread.getName());
         }
     }
-
 
     public void removeConsumer() {
         if (consumers.isEmpty()) {
             System.out.println("No consumers to remove.");
             return;
         }
-        // Remove the last added consumer
         int index = consumers.size() - 1;
-        consumers.remove(index);
         Thread consumerThread = consumerThreads.remove(index);
-        // Optionally interrupt the consumer if needed
+        consumers.remove(index);
+        activeConsumers.decrementAndGet();
         consumerThread.interrupt();
         try {
             consumerThread.join();
             System.out.println("Removed and stopped " + consumerThread.getName());
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             System.out.println("Interrupted while waiting for thread " + consumerThread.getName());
         }
     }
 
     public void shutdown() {
-        System.out.println("Initiating shutdown");
-
-        // Shutdown the order queue first
-        orderQueue.shutdown();
-
-        // Shutdown all producers
-        for (Producer producer : producers) {
-            producer.shutdown();
+        synchronized (this) {
+            if (shutdownState != ShutdownState.NOT_STARTED) {
+                System.out.println("Shutdown already in progress or completed");
+                return;
+            }
+            System.out.println("Initiating shutdown");
+            shutdownState = ShutdownState.IN_PROGRESS;
         }
 
-        // Wait for all producers to finish
-        waitForThreadsToFinish(producerThreads);
+        orderQueue.shutdown();
+        producers.forEach(Producer::shutdown);
+        producerThreads.forEach(Thread::interrupt);
 
-        // Wait for all consumers to finish
+        waitForThreadsToFinish(producerThreads);
         waitForThreadsToFinish(consumerThreads);
 
+        shutdownState = ShutdownState.COMPLETED;
         System.out.println("System shutdown complete");
     }
 
     private void waitForThreadsToFinish(List<Thread> threads) {
-        for (Thread thread : threads) {
+        threads.forEach(thread -> {
             try {
                 thread.join();
                 System.out.println("Thread " + thread.getName() + " has finished.");
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 System.out.println("Interrupted while waiting for thread " + thread.getName());
             }
-        }
+        });
     }
 
-    // Getter for activeProducers
     public AtomicInteger getActiveProducers() {
         return activeProducers;
+    }
+
+    public AtomicInteger getActiveConsumers() {
+        return activeConsumers;
     }
 
     public List<Thread> getProducerThreads() {
@@ -136,8 +156,8 @@ public class MultithreadingManager {
     public int getTotalOrdersCreated() {
         return orderFactory.getTotalOrdersCreated();
     }
+
     public int getTotalOrdersProcessed() {
         return orderProcessor.getTotalOrdersProcessed();
     }
-
 }

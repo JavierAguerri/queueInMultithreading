@@ -1,5 +1,7 @@
 package org.javieraguerri;
 
+import java.util.stream.IntStream;
+
 public class QueueInMultithreadingApp {
     private static final int MAX_QUEUE_SIZE = 4;
     private static final int NUMBER_OF_PRODUCERS = 3;
@@ -9,38 +11,29 @@ public class QueueInMultithreadingApp {
     public static void main(String[] args) {
         MultithreadingManager manager = new MultithreadingManager(MAX_QUEUE_SIZE);
 
-        // Adding producers with random delays
-        for (int i = 0; i < NUMBER_OF_PRODUCERS; i++) {
-            long delayMs = getRandomDelay();
-            manager.addProducer(delayMs);
-        }
+        IntStream.range(0, NUMBER_OF_PRODUCERS)
+                .forEach(i -> manager.addProducer(getRandomDelay()));
 
-        // Adding consumers with random delays
-        for (int i = 0; i < NUMBER_OF_CONSUMERS; i++) {
-            long delayMs = getRandomDelay();
-            manager.addConsumer(delayMs);
-        }
+        IntStream.range(0, NUMBER_OF_CONSUMERS)
+                .forEach(i -> manager.addConsumer(getRandomDelay()));
 
-        // Simulate runtime behavior and remove a producer and consumer
         try {
             Thread.sleep(RUN_DURATION_MS / 2);
             manager.removeProducer();
             manager.removeConsumer();
             Thread.sleep(RUN_DURATION_MS / 2);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
 
         manager.shutdown();
 
-        // Print total orders created and processed
         int totalCreated = manager.getTotalOrdersCreated();
         int totalProcessed = manager.getTotalOrdersProcessed();
 
         System.out.println("Total orders created: " + totalCreated);
         System.out.println("Total orders processed: " + totalProcessed);
 
-        // Assert that all orders created were processed
         if (totalCreated == totalProcessed) {
             System.out.println("All orders were processed successfully.");
         } else {
@@ -49,7 +42,6 @@ public class QueueInMultithreadingApp {
     }
 
     private static long getRandomDelay() {
-        // Generate a random delay between 100 and 4000 milliseconds
         return 100L + (long) (Math.random() * 3901);
     }
 }

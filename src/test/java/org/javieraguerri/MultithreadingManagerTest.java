@@ -1,86 +1,69 @@
 package org.javieraguerri;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Test;
-import static org.awaitility.Awaitility.await;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.Order;
+
+
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
+
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class MultithreadingManagerTest {
 
     private static long getRandomDelay() {
-        // Generate a random delay between 100 and 4000 milliseconds
         return 100L + (long) (Math.random() * 3901);
     }
 
     @Test
+    @Order(1)
     @DisplayName("1. Processing from an empty queue")
     public void testProcessingFromEmptyQueue() throws InterruptedException {
         MultithreadingManager manager = new MultithreadingManager(4);
         long consumerDelayMs = 100L;
-        int numberOfConsumers = 6;
-        for (int i = 0; i < numberOfConsumers; i++) {
-            manager.addConsumer(consumerDelayMs);
-        }
+        IntStream.range(0, 6).forEach(i -> manager.addConsumer(consumerDelayMs));
         Thread.sleep(2000);
 
-        assertEquals(manager.getOrderQueueSize(), 0, "Queue should be empty.");
-
-        for (Thread consumerThread : manager.getConsumerThreads()) {
-            assertTrue(consumerThread.isAlive(), "Consumer thread should be alive.");
-        }
-
+        assertEquals(0, manager.getOrderQueueSize(), "Queue should be empty.");
+        manager.getConsumerThreads().forEach(thread -> assertTrue(thread.isAlive(), "Consumer thread should be alive."));
         manager.shutdown();
-
-        for (Thread consumerThread : manager.getConsumerThreads()) {
-            assertFalse(consumerThread.isAlive(), "Consumer thread should have terminated after shutdown.");
-        }
-        int totalOrdersCreated = manager.getTotalOrdersCreated();
-        assertEquals(0, totalOrdersCreated, "No orders should have been created.");
-
-        int totalOrdersProcessed = manager.getTotalOrdersProcessed();
-        assertEquals(0, totalOrdersProcessed, "No orders should have been processed.");
+        manager.getConsumerThreads().forEach(thread -> assertFalse(thread.isAlive(), "Consumer thread should have terminated after shutdown."));
+        assertEquals(0, manager.getTotalOrdersCreated(), "No orders should have been created.");
+        assertEquals(0, manager.getTotalOrdersProcessed(), "No orders should have been processed.");
     }
 
     @Test
+    @Order(2)
     @DisplayName("2. Force the upper boundary (queue full)")
     public void testProducersBlockedWhenQueueFull() throws InterruptedException {
         int MAX_QUEUE_SIZE = 4;
         MultithreadingManager manager = new MultithreadingManager(MAX_QUEUE_SIZE);
         long producerDelayMs = 100L;
-        int numberOfProducers = 6;
-        for (int i = 0; i < numberOfProducers; i++) {
-            manager.addProducer(producerDelayMs);
-        }
+        IntStream.range(0, 6).forEach(i -> manager.addProducer(producerDelayMs));
         Thread.sleep(2000);
 
-        assertEquals(manager.getOrderQueueSize(), MAX_QUEUE_SIZE, "Queue should be full.");
-
-        for (Thread producerThread : manager.getProducerThreads()) {
-            assertTrue(producerThread.isAlive(), "Producer thread should be alive.");
-        }
-
+        assertEquals(MAX_QUEUE_SIZE, manager.getOrderQueueSize(), "Queue should be full.");
+        manager.getProducerThreads().forEach(thread -> assertTrue(thread.isAlive(), "Producer thread should be alive."));
         manager.shutdown();
-
-        for (Thread producerThread : manager.getProducerThreads()) {
-            assertFalse(producerThread.isAlive(), "Producer thread should have terminated after shutdown.");
-        }
-
-        int totalOrdersCreated = manager.getTotalOrdersCreated();
-        assertEquals(MAX_QUEUE_SIZE, totalOrdersCreated, "Total orders created should equal the queue's maximum capacity.");
-
-        int totalOrdersProcessed = manager.getTotalOrdersProcessed();
-        assertEquals(0, totalOrdersProcessed, "No orders should have been processed.");
+        manager.getProducerThreads().forEach(thread -> assertFalse(thread.isAlive(), "Producer thread should have terminated after shutdown."));
+        assertEquals(MAX_QUEUE_SIZE, manager.getTotalOrdersCreated(), "Total orders created should equal the queue's maximum capacity.");
+        assertEquals(0, manager.getTotalOrdersProcessed(), "No orders should have been processed.");
     }
 
     @Test
+    @Order(3)
     @DisplayName("3. Start with processing from an empty queue and then continue normally")
     public void testProcessingFromEmptyQueueThenContinue() throws InterruptedException {
         MultithreadingManager manager = new MultithreadingManager(4);
 
         long consumerDelayMs = 500L;
         manager.addConsumer(consumerDelayMs);
-        Thread.sleep(1000); // give time to consumer to get the lock
+        Thread.sleep(1000);
 
         long producerDelayMs = 500L;
         manager.addProducer(producerDelayMs);
@@ -98,6 +81,7 @@ public class MultithreadingManagerTest {
     }
 
     @Test
+    @Order(4)
     @DisplayName("4. Normal operation with balanced execution (no boundary limits reached)")
     public void testNormalOperationBalancedExecutionNoHittingBoundaries() throws InterruptedException {
         MultithreadingManager manager = new MultithreadingManager(10);
@@ -117,6 +101,7 @@ public class MultithreadingManagerTest {
     }
 
     @Test
+    @Order(5)
     @DisplayName("5. Gently hitting boundaries (without forcing them)")
     public void testGentlyHittingBoundaries() {
         int MAX_QUEUE_SIZE = 4;
@@ -128,12 +113,14 @@ public class MultithreadingManagerTest {
         manager.addConsumer(100L);
         await().atMost(2, TimeUnit.SECONDS).until(() -> manager.getOrderQueueSize() <= 0);
         manager.removeConsumer();
+
         manager.addProducer(100L);
         await().atMost(2, TimeUnit.SECONDS).until(() -> manager.getOrderQueueSize() >= MAX_QUEUE_SIZE);
         manager.removeProducer();
         manager.addConsumer(100L);
         await().atMost(2, TimeUnit.SECONDS).until(() -> manager.getOrderQueueSize() <= 0);
         manager.removeConsumer();
+
         manager.addProducer(100L);
         await().atMost(2, TimeUnit.SECONDS).until(() -> manager.getOrderQueueSize() >= MAX_QUEUE_SIZE);
         manager.removeProducer();
@@ -149,48 +136,28 @@ public class MultithreadingManagerTest {
     }
 
     @Test
+    @Order(6)
     @DisplayName("6. Burst of placing orders and burst of processing")
     public void testBursts() throws InterruptedException {
         MultithreadingManager manager = new MultithreadingManager(4);
         long delayMs = 100L;
-        int numberOfProducers = 8;
-        int numberOfConsumers = 8;
 
-        for (int i = 0; i < numberOfProducers; i++) {
-            manager.addProducer(delayMs);
-        }
+        IntStream.range(0, 8).forEach(i -> manager.addProducer(delayMs));
         Thread.sleep(3000);
-        for (int i = 0; i < numberOfProducers; i++) {
-            manager.removeProducer();
-        }
-        for (int i = 0; i < numberOfConsumers; i++) {
-            manager.addConsumer(delayMs);
-        }
+        IntStream.range(0, 8).forEach(i -> manager.removeProducer());
+        IntStream.range(0, 8).forEach(i -> manager.addConsumer(delayMs));
         Thread.sleep(3000);
-        for (int i = 0; i < numberOfConsumers; i++) {
-            manager.removeConsumer();
-        }
-        for (int i = 0; i < numberOfProducers; i++) {
-            manager.addProducer(delayMs);
-        }
+        IntStream.range(0, 8).forEach(i -> manager.removeConsumer());
+        IntStream.range(0, 8).forEach(i -> manager.addProducer(delayMs));
         Thread.sleep(3000);
-        for (int i = 0; i < numberOfProducers; i++) {
-            manager.removeProducer();
-        }
-        for (int i = 0; i < numberOfConsumers; i++) {
-            manager.addConsumer(delayMs);
-        }
+        IntStream.range(0, 8).forEach(i -> manager.removeProducer());
+        IntStream.range(0, 8).forEach(i -> manager.addConsumer(delayMs));
         Thread.sleep(3000);
-        for (int i = 0; i < numberOfConsumers; i++) {
-            manager.removeConsumer();
-        }
+        IntStream.range(0, 8).forEach(i -> manager.removeConsumer());
+
         manager.shutdown();
-        for (Thread producerThread : manager.getProducerThreads()) {
-            assertFalse(producerThread.isAlive(), "Producer thread should have terminated after shutdown.");
-        }
-        for (Thread consumerThread : manager.getConsumerThreads()) {
-            assertFalse(consumerThread.isAlive(), "Consumer thread should have terminated after shutdown.");
-        }
+        manager.getProducerThreads().forEach(thread -> assertFalse(thread.isAlive(), "Producer thread should have terminated after shutdown."));
+        manager.getConsumerThreads().forEach(thread -> assertFalse(thread.isAlive(), "Consumer thread should have terminated after shutdown."));
 
         int totalOrdersCreated = manager.getTotalOrdersCreated();
         int totalOrdersProcessed = manager.getTotalOrdersProcessed();
@@ -199,32 +166,20 @@ public class MultithreadingManagerTest {
     }
 
     @Test
+    @Order(7)
     @DisplayName("7. Long execution with mixed operations")
     public void testLongExecution() throws InterruptedException {
-        MultithreadingManager manager = new MultithreadingManager(6);
-        int numberOfProducers = 8;
-        for (int i = 0; i < numberOfProducers; i++) {
-            manager.addProducer(getRandomDelay());
-        }
-        int numberOfConsumers = 8;
-        for (int i = 0; i < numberOfConsumers; i++) {
-            manager.addConsumer(getRandomDelay());
-        }
+        MultithreadingManager manager = new MultithreadingManager(4);
+
+        IntStream.range(0, 8).forEach(i -> manager.addProducer(getRandomDelay()));
+        IntStream.range(0, 8).forEach(i -> manager.addConsumer(getRandomDelay()));
         Thread.sleep(60000);
 
-        for (Thread producerThread : manager.getProducerThreads()) {
-            assertTrue(producerThread.isAlive(), "Producer thread should be alive.");
-        }
-        for (Thread consumerThread : manager.getConsumerThreads()) {
-            assertTrue(consumerThread.isAlive(), "Consumer thread should be alive.");
-        }
+        manager.getProducerThreads().forEach(thread -> assertTrue(thread.isAlive(), "Producer thread should be alive."));
+        manager.getConsumerThreads().forEach(thread -> assertTrue(thread.isAlive(), "Consumer thread should be alive."));
         manager.shutdown();
-        for (Thread producerThread : manager.getProducerThreads()) {
-            assertFalse(producerThread.isAlive(), "Producer thread should have terminated after shutdown.");
-        }
-        for (Thread consumerThread : manager.getConsumerThreads()) {
-            assertFalse(consumerThread.isAlive(), "Consumer thread should have terminated after shutdown.");
-        }
+        manager.getProducerThreads().forEach(thread -> assertFalse(thread.isAlive(), "Producer thread should have terminated after shutdown."));
+        manager.getConsumerThreads().forEach(thread -> assertFalse(thread.isAlive(), "Consumer thread should have terminated after shutdown."));
 
         int totalOrdersCreated = manager.getTotalOrdersCreated();
         int totalOrdersProcessed = manager.getTotalOrdersProcessed();
@@ -232,9 +187,50 @@ public class MultithreadingManagerTest {
         assertEquals(0, manager.getOrderQueueSize(), "Order queue should be empty at the end.");
     }
 
+    @Test
+    @Order(8)
+    @DisplayName("8. Add and remove producers and consumers beyond the limits")
+    public void testProducerConsumerLimits() throws InterruptedException {
+        int consumerLimit = 4;
+        int producerLimit = 4;
+        MultithreadingManager manager = new MultithreadingManager(4, consumerLimit, producerLimit);
 
+        IntStream.range(0, 10).forEach(i -> manager.addProducer(100));
+        IntStream.range(0, 10).forEach(i -> manager.addConsumer(100));
+        Thread.sleep(3000);
+        assertEquals(producerLimit, manager.getActiveProducers().get());
+        assertEquals(consumerLimit, manager.getActiveConsumers().get());
 
+        IntStream.range(0, 10).forEach(i -> manager.removeProducer());
+        while (manager.getOrderQueueSize() > 0) {
+            Thread.sleep(100);
+        }
+        IntStream.range(0, 10).forEach(i -> manager.removeConsumer());
+        Thread.sleep(3000);
+        assertEquals(0, manager.getActiveProducers().get());
+        assertEquals(0, manager.getActiveConsumers().get());
 
+        manager.shutdown();
+        int totalOrdersCreated = manager.getTotalOrdersCreated();
+        int totalOrdersProcessed = manager.getTotalOrdersProcessed();
+        assertEquals(totalOrdersCreated, totalOrdersProcessed, "All orders created should have been processed.");
+        assertEquals(0, manager.getOrderQueueSize(), "Order queue should be empty at the end.");
+    }
 
+    @Test
+    @Order(9)
+    @DisplayName("9. Activate shutdown repeatedly")
+    public void testActivateShutdownRepeatedly() throws InterruptedException {
+        MultithreadingManager manager = new MultithreadingManager(4);
+        IntStream.range(0, 10).forEach(i -> manager.addProducer(100));
+        IntStream.range(0, 10).forEach(i -> manager.addConsumer(100));
+        Thread.sleep(4000);
 
+        IntStream.range(0, 5).forEach(i -> manager.shutdown());
+
+        int totalOrdersCreated = manager.getTotalOrdersCreated();
+        int totalOrdersProcessed = manager.getTotalOrdersProcessed();
+        assertEquals(totalOrdersCreated, totalOrdersProcessed, "All orders created should have been processed.");
+        assertEquals(0, manager.getOrderQueueSize(), "Order queue should be empty at the end.");
+    }
 }

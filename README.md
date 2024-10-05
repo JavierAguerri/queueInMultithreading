@@ -45,8 +45,8 @@ operations of the two components: "place_order (data1), place_order (data2), pro
 process_order (), ..." (or in its abbreviated version: "P, P, C, C, ... ").</p>
 
 ## Test cases
-<p>Describe the most relevant test cases to be tested, and for each test case, indicate the input
-that generates it (assume MAX_QUEUE_SIZE = 4). Use the abbreviated version “P,P,C,C…” to indicate the input.</p>
+<p><i>Describe the most relevant test cases to be tested, and for each test case, indicate the input
+that generates it (assume MAX_QUEUE_SIZE = 4). Use the abbreviated version “P,P,C,C…” to indicate the input.</i></p>
 
 ### Answer
 
@@ -82,29 +82,30 @@ Desciption: it can handle a long sequence of events without issues.
 ```
 
 ## Improvements
-<p>Analyze the pseudo-code and identify if it contains any error(s). If there are no errors but
-you want to propose improvements, detail them.</p>
+<p><i>Analyze the pseudo-code and identify if it contains any error(s). If there are no errors but
+you want to propose improvements, detail them.</i></p>
 
 ### Answer
 
 <p>First I would like to make an observation. In the provided pseudocode, the queue is referenced with
-self.queue. I will assume here that self refers to the same shared instance and thus both threads are trying to access the same queue.</p>
+self.queue. I assume that self refers to the same shared instance, meaning both threads are trying to access the same queue.</p>
 
 <p>Now let's discuss bugs and improvements:</p>
 <ul>
 <li>Inconsistent methods to check queue status: size vs length.</li>
 <li>No synchronization strategy for common resources (queue), eventually this will cause data corruption, deadlocks and malfunctioning.</li>
 <li>Use of conditionals instead of loops may cause spurious wakeups.</li>
-<li>There could be an actual deadlock if process_order is delayed for some reason right after checking the queue length but before
+<li>There could be a deadlock if process_order is delayed for some reason right after checking the queue length but before
 executing sleep(), and in the meantime place_order fills the queue and does sleep().</li>
-<li>Condition variables could be used for better synchronization.</li>
+<li>Condition variables or synchronized blocks could be used for better synchronization.</li>
 <li>process_order checks the queue length before it pops. In case place_order was waiting, this means process_order has to execute again
 so the condition of the queue length becomes true. The missed wakeup introduces a delay and reduces the throughput.</li>
 <li>There is no error handling. Upon exceptions the system may enter an invalid state or it may lose data. For example, if the queue 
 is empty and place_order starts but it terminates abruptly right before waking up process_order, then the order will be lost.</li>
 <li>Because of the infinite loops, there is no way to stop the system gracefully.</li>
 </ul>
-<p>Proposed pseudocode:</p>
+<p>In the current project there is an implemented solution which deals with the mentioned bugs and includes the improvements. 
+Browse the repository and check it, but conceptually you can get an idea from the following pseudocode:</p>
 
 ```
 thread place_order(data) {
@@ -130,7 +131,7 @@ thread place_order(data) {
 thread process_order() {
     while (true) {
         lock.acquire();
-        try { 
+        try {
             while (self.queue.length() == 0) {
                 if (shutdown) {
                     exit;
@@ -149,42 +150,47 @@ thread process_order() {
 ```
 
 ## Multiple order producer and consumer
-<p>If instead of having 1 order generator and 1 order processor, there were N and N, all sharing
+<p><i>If instead of having 1 order generator and 1 order processor, there were N and N, all sharing
 the same queue, what new situations should it cover that the previous tests do not cover? 
-Detail how you would implement the tests and describe a typical error.</p>
+Detail how you would implement the tests and describe a typical error.</i></p>
 
 ### Answer
+<p>Possible issues related to deadlocks and race conditions are already covered by tests from section 1. 
+Also those issues are mitigated by the improvements introduced in section 2.
+However, with multiple producers and consumers, new challenges arise:</p>
+<ul>
+<li>Too many producers and/or consumers -> Implement limits -> test those limits</li>
+<li>No way to stop the execution -> Implement shutdown mechanism -> test shutdown</li>
+</ul>
 
-Possible issues regarding deadlocks and race conditions are already covered by tests from section 1. 
-Also those situations are mitigated by the improvements introduced in section 2.
-A new situation that could happen because of having multiple producers and consumers is that 
-some producers and/or consumers never get the lock, so they are starved. In order to implement this test I would:
+<p>Here the list of additional test cases:</p>
 
+```
+Case 8. Add and remove producers and consumers beyond the limits.
+Description: the system should handle this gracefully and perform as usual 
 
+Case 9. Activate shutdowm repeatedly
+Description: the system should shutdown gracefully as if shutdown were executed just once (shutdown operation should be idempotent)
+```
+<p>This project implements also all the tests listed both in section 1 and 3. In order to run them, follow these instructions:</p>
+<ul>
+<li>Install Java 17 and set $JAVA_HOME</li>
+<li>Install maven 3.8.5</li>
+<li>Open IDE (e.g. IntelliJ) and open project</li>
+<li>Build project</li>
+<li>Run the test class</li>
+</ul>
 
+<p>Other testing considerations that are not implemented in this demo but could be part of a comprehensive test plan:</p>
+<ul>
+<li>Security testing: ensure threads, consumers and producers are unable to access data of other elements.</li>
+<li>Endurance testing: monitor memory usage during long periods of time in order to detect memory leaks.</li>
+<li>Stress testing: send a high number of requests to the system and monitor health status and response times.</li>
+</ul>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+<p><b>Final note. The project could be improved by using dependency injection frameworks and interface segration techniques 
+to reduce the coupling and allow the injection of mock and stub implementations, which opens new testing possibilities.
+It simplifies configuration and it helps hanlding dependencies as the application grows. It improves clarity as well.
+Some suggestions are Mockito and Spring. However, the current implementation is just a drafted demo to showcase the choice 
+of a set of tests and it should not be understood as a proper testing framework.</b></p>
 

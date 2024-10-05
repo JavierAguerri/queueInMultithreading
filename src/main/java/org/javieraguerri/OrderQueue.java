@@ -16,20 +16,14 @@ public class OrderQueue {
     public boolean addOrder(OrderFactory orderFactory) throws InterruptedException {
         synchronized (lock) {
             while (queue.size() == MAX_QUEUE_SIZE && !shutdown) {
-                System.out.println("Thread " + Thread.currentThread().getName() +
-                        " found the queue full and goes to sleep!");
+                System.out.println(Thread.currentThread().getName() + " found the queue full and goes to sleep!");
                 lock.wait();
-                System.out.println("Thread " + Thread.currentThread().getName() + " woke up!");
+                System.out.println(Thread.currentThread().getName() + " woke up!");
             }
-            if (shutdown) {
-                // No longer accepting new orders
-                return false;
-            }
-            // Create the order here after confirming we're not shutting down
+            if (shutdown) return false;
             Order order = orderFactory.produceOrder();
             queue.add(order);
-            System.out.println("Thread " + Thread.currentThread().getName() +
-                    " produced: " + order + " (Queue size: " + queue.size() + ")");
+            System.out.println(Thread.currentThread().getName() + " produced: " + order + " (Queue size: " + queue.size() + ")");
             lock.notifyAll();
             return true;
         }
@@ -38,17 +32,13 @@ public class OrderQueue {
     public Order removeOrder() throws InterruptedException {
         synchronized (lock) {
             while (queue.isEmpty() && !shutdown) {
-                System.out.println("Thread " + Thread.currentThread().getName() +
-                        " found the queue empty and goes to sleep!");
+                System.out.println(Thread.currentThread().getName() + " found the queue empty and goes to sleep!");
                 lock.wait();
-                System.out.println("Thread " + Thread.currentThread().getName() + " woke up!");
+                System.out.println(Thread.currentThread().getName() + " woke up!");
             }
-            if (queue.isEmpty() && shutdown) {
-                return null;
-            }
+            if (queue.isEmpty() && shutdown) return null;
             Order order = queue.poll();
-            System.out.println("Thread " + Thread.currentThread().getName() +
-                    " consumed: " + order + " (Queue size: " + queue.size() + ")");
+            System.out.println(Thread.currentThread().getName() + " consumed: " + order + " (Queue size: " + queue.size() + ")");
             lock.notifyAll();
             return order;
         }
@@ -66,5 +56,4 @@ public class OrderQueue {
             return queue.size();
         }
     }
-
 }
