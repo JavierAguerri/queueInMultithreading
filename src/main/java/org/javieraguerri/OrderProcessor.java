@@ -1,7 +1,10 @@
 package org.javieraguerri;
 
+import org.springframework.stereotype.Component;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Component
 public class OrderProcessor {
     private final AtomicInteger totalOrdersProcessed = new AtomicInteger(0);
 
