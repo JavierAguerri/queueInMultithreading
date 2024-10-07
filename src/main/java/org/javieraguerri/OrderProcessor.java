@@ -1,7 +1,10 @@
 package org.javieraguerri;
 
+import org.springframework.stereotype.Component;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Component
 public class OrderProcessor {
     private final AtomicInteger totalOrdersProcessed = new AtomicInteger(0);
 
@@ -10,7 +13,7 @@ public class OrderProcessor {
     }
 
     public void processOrder(Order order) {
-        System.out.println("Thread " + Thread.currentThread().getName() + " processing " + order);
+        System.out.println(Thread.currentThread().getName() + " processing " + order);
         totalOrdersProcessed.incrementAndGet();
     }
 }

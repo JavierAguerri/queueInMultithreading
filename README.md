@@ -1,4 +1,5 @@
 # Order queue - multithreading
+
 <p>The following code implements part of a purchase order system. It consists of a component that
 puts the orders arriving in a queue, and another component takes the orders from the queue
 and processes them. Each of these parts runs in a separate thread or process.</p>
@@ -45,6 +46,7 @@ operations of the two components: "place_order (data1), place_order (data2), pro
 process_order (), ..." (or in its abbreviated version: "P, P, C, C, ... ").</p>
 
 ## Test cases
+
 <p><i>Describe the most relevant test cases to be tested, and for each test case, indicate the input
 that generates it (assume MAX_QUEUE_SIZE = 4). Use the abbreviated version “P,P,C,C…” to indicate the input.</i></p>
 
@@ -82,6 +84,7 @@ Desciption: it can handle a long sequence of events without issues.
 ```
 
 ## Improvements
+
 <p><i>Analyze the pseudo-code and identify if it contains any error(s). If there are no errors but
 you want to propose improvements, detail them.</i></p>
 
@@ -147,17 +150,25 @@ thread process_order() {
         do_actual_processing(order);
     }
 }
+
+shutdown() {
+    killProducer()
+    notifyAndGracefullyShutdownConsumer() // so it does empty the queue before the program exits
+}
 ```
 
 ## Multiple order producer and consumer
+
 <p><i>If instead of having 1 order generator and 1 order processor, there were N and N, all sharing
 the same queue, what new situations should it cover that the previous tests do not cover? 
 Detail how you would implement the tests and describe a typical error.</i></p>
 
 ### Answer
-<p>Possible issues related to deadlocks and race conditions are already covered by tests from section 1. 
-Also those issues are mitigated by the improvements introduced in section 2.
-However, with multiple producers and consumers, new challenges arise:</p>
+
+<p>There are issues that may appear or get worse when we have multiple producers and consumers. These are deadlocks,
+race conditions, and inconsistent data derived from multiple threads accessing resources and variables which are not properly
+synchronized. Many of these issues are already made evident by tests from section 1 and mitigated by the improvements introduced in section 2.
+Other possible problems that we may tackle with new tests are:</p>
 <ul>
 <li>Too many producers and/or consumers -> Implement limits -> test those limits</li>
 <li>No way to stop the execution -> Implement shutdown mechanism -> test shutdown</li>
@@ -172,14 +183,29 @@ Description: the system should handle this gracefully and perform as usual
 Case 9. Activate shutdowm repeatedly
 Description: the system should shutdown gracefully as if shutdown were executed just once (shutdown operation should be idempotent)
 ```
+
+<p>There are few other issues that may arise which do not have a specific test but are already covered by the implemented collection:</p>
+<ul>
+<li>Shutdown is activated with orders in the queue and they are lost -> shutdown must allow consumers to empty the queue</li>
+<li>Producers and consumers are killed at anytime -> <b>at any case, orders that made it into the queue are counted towards the total produced, likewise processed orders, and both totals must match</b></li>
+</ul>
+
 <p>This project implements also all the tests listed both in section 1 and 3. In order to run them, follow these instructions:</p>
 <ul>
+<li>Download project</li>
 <li>Install Java 17 and set $JAVA_HOME</li>
 <li>Install maven 3.8.5</li>
 <li>Open IDE (e.g. IntelliJ) and open project</li>
 <li>Build project</li>
-<li>Run the test class</li>
+<li>Run all the tests</li>
 </ul>
+
+<p><b>IMPORTANT NOTE. Please keep in mind that the application implementation is just a drafted demo to showcase the choice and 
+implementation of a set of tests cases. The main App lacks key improvements such as interface segregation, proper logging tools,
+usage of concurreny utilities (executiors) and others, but it will suffice to perform as the system under test.</b></p>
+
+<p>It is also worth noting that only integration (e2e for the application context) tests are being considered here. 
+A real project would include a larger amount of unit tests to provide a robust testing foundation.</p>
 
 <p>Other testing considerations that are not implemented in this demo but could be part of a comprehensive test plan:</p>
 <ul>
@@ -187,10 +213,4 @@ Description: the system should shutdown gracefully as if shutdown were executed 
 <li>Endurance testing: monitor memory usage during long periods of time in order to detect memory leaks.</li>
 <li>Stress testing: send a high number of requests to the system and monitor health status and response times.</li>
 </ul>
-
-<p><b>Final note. The project could be improved by using dependency injection frameworks and interface segration techniques 
-to reduce the coupling and allow the injection of mock and stub implementations, which opens new testing possibilities.
-It simplifies configuration and it helps hanlding dependencies as the application grows. It improves clarity as well.
-Some suggestions are Mockito and Spring. However, the current implementation is just a drafted demo to showcase the choice 
-of a set of tests and it should not be understood as a proper testing framework.</b></p>
 

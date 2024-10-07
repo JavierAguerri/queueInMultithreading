@@ -1,9 +1,9 @@
 package org.javieraguerri;
 
 public class Order {
-    private final int id;
+    private final String id;
 
-    public Order(int id) {
+    public Order(String id) {
         this.id = id;
     }
 

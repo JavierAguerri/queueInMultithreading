@@ -1,30 +1,46 @@
 package org.javieraguerri;
 
-public class Consumer implements Runnable {
-    private final OrderQueue orderQueue;
-    private final long delayMs;
-    private final OrderProcessor orderProcessor;
+import lombok.SneakyThrows;
 
-    public Consumer(OrderQueue orderQueue, long delayMs, OrderProcessor orderProcessor) {
+public class Consumer {
+    private final OrderQueue orderQueue;
+    private final OrderProcessor orderProcessor;
+    private final Thread consumerThread;
+    private final long delayMs;
+
+    public Consumer(OrderQueue orderQueue, long delayMs, OrderProcessor orderProcessor, int threadID) {
         this.orderQueue = orderQueue;
         this.delayMs = delayMs;
         this.orderProcessor = orderProcessor;
+        this.consumerThread = new Thread(this::run, "Consumer-" + threadID);
+        consumerThread.start();
+        System.out.println("Created " + consumerThread.getName());
     }
 
-    @Override
+    @SneakyThrows
+    public void shutdown() {
+        consumerThread.join();
+    }
+
+    @SneakyThrows
+    public void kill() {
+        consumerThread.interrupt();
+    }
+
     public void run() {
-        System.out.println("Thread " + Thread.currentThread().getName() + " started.");
+        System.out.println(Thread.currentThread().getName() + " started");
         try {
             while (true) {
-                Order order = orderQueue.removeOrder();
-                if (order == null) break;
-                orderProcessor.processOrder(order);
+                synchronized (orderQueue.getLock()) {
+                    Order order = orderQueue.removeOrder();
+                    if (order == null)
+                        break;
+                    orderProcessor.processOrder(order);
+                }
                 Thread.sleep(delayMs);
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            System.out.println("Thread " + Thread.currentThread().getName() + " shut down");
+            System.out.println(Thread.currentThread().getName() + " shut down");
         }
     }
 }

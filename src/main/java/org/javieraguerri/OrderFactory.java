@@ -1,15 +1,10 @@
 package org.javieraguerri;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.stereotype.Component;
 
+@Component
 public class OrderFactory {
-    private final AtomicInteger totalOrdersCreated = new AtomicInteger(0);
-
-    public Order produceOrder() {
-        return new Order(totalOrdersCreated.incrementAndGet());
-    }
-
-    public int getTotalOrdersCreated() {
-        return totalOrdersCreated.get();
+    public Order produceOrder(String id) {
+        return new Order(id);
     }
 }
