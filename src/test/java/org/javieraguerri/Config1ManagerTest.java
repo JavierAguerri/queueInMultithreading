@@ -16,7 +16,7 @@ public class Config1ManagerTest extends BaseMultithreadingManagerTest {
     public void normalOperationBalancedExecutionNoHittingBoundariesTest() throws InterruptedException {
         manager.addProducer(500L);
         manager.addProducer(500L);
-        Thread.sleep(600);
+        Thread.sleep(500);
         manager.removeProducer();
         manager.addConsumer(500L);
 
